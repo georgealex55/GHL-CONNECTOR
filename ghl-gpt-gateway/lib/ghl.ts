@@ -1,3 +1,5 @@
+import { getCompanyIdInfo } from "@/lib/identity";
+
 const DEFAULT_BASE = "https://services.leadconnectorhq.com";
 
 export type RiskLevel = "read" | "write" | "destructive";
@@ -11,6 +13,7 @@ type Rule = {
 
 const RULES: Rule[] = [
   // Agency / location discovery
+  { method: "GET", pattern: /^\/companies\/[A-Za-z0-9_-]+$/, version: "v3", risk: "read" },
   { method: "GET", pattern: /^\/locations\/search(?:\?.*)?$/, version: "v3", risk: "read" },
   { method: "GET", pattern: /^\/locations\/[A-Za-z0-9_-]+$/, version: "v3", risk: "read" },
 
@@ -104,10 +107,16 @@ export async function ghlRequest(input: {
     throw new Error("Destructive action blocked. Set ALLOW_DESTRUCTIVE_ACTIONS=true and pass confirmDestructive=true.");
   }
 
-  if (path.startsWith("/locations/search") && process.env.GHL_COMPANY_ID) {
+  if (path.startsWith("/locations/search")) {
     const [pathname, query = ""] = path.split("?");
     const params = new URLSearchParams(query);
-    if (!params.has("companyId")) params.set("companyId", process.env.GHL_COMPANY_ID);
+    if (!params.has("companyId")) {
+      const { companyId } = getCompanyIdInfo();
+      if (!companyId) {
+        throw new Error("Unable to determine HighLevel Company ID from GHL_COMPANY_ID or the Private Integration token.");
+      }
+      params.set("companyId", companyId);
+    }
     path = `${pathname}?${params.toString()}`;
   }
 
