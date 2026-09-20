@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAuthorized } from "@/lib/auth";
 import { getCompanyIdInfo } from "@/lib/identity";
-import { ghlRequest } from "@/lib/ghl";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,30 +12,15 @@ export async function GET(request: Request) {
 
   const info = getCompanyIdInfo();
 
-  if (!info.companyId) {
-    return NextResponse.json(
-      {
-        ok: false,
-        companyId: null,
-        source: info.source,
-        error: "Company ID could not be discovered from the environment or token.",
-      },
-      { status: 400 },
-    );
-  }
-
-  const company = await ghlRequest({
-    method: "GET",
-    path: `/companies/${info.companyId}`,
-  });
-
   return NextResponse.json(
     {
-      ok: company.ok,
+      ok: Boolean(info.companyId),
       companyId: info.companyId,
       source: info.source,
-      company: company.data,
+      note: info.companyId
+        ? "Company ID discovered locally from the configured environment or Private Integration token. Use list_locations to validate agency access against HighLevel."
+        : "Company ID could not be discovered from the environment or token.",
     },
-    { status: company.ok ? 200 : company.status },
+    { status: info.companyId ? 200 : 400 },
   );
 }
