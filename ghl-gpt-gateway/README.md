@@ -6,13 +6,14 @@ A secure Vercel/Next.js control layer between GPT and HighLevel.
 
 - `GHL_PRIVATE_INTEGRATION_TOKEN` — full HighLevel Private Integration token
 - `GATEWAY_API_KEY` — separate secret used by GPT to call this gateway
-- `GHL_COMPANY_ID` — agency/company ID (recommended for agency location search)
+- `GHL_COMPANY_ID` — optional override. If omitted, the gateway automatically discovers the agency/company ID from the Private Integration JWT when available.
 - `GHL_API_BASE` — defaults to `https://services.leadconnectorhq.com`
 - `ALLOW_DESTRUCTIVE_ACTIONS` — defaults to false; set true only if you want deletes/removals enabled
 
 ## Main endpoints
 
-- `GET /api/health`
+- `GET /api/health` — reports whether Company ID was found and whether its source is `env` or `token`
+- `GET /api/agency/identity` — protected diagnostic that validates the discovered Company ID against HighLevel
 - `GET /api/openapi.json` — GPT Actions/OpenAPI schema
 - `POST /api/agency/action` — semantic action router
 - `POST /api/ghl/request` — advanced allowlisted proxy
