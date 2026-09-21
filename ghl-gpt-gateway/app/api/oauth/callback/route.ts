@@ -46,16 +46,16 @@ export async function GET(request: Request) {
       method: "POST",
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: JSON.stringify({
+      body: new URLSearchParams({
         client_id: clientId,
         client_secret: clientSecret,
         grant_type: "authorization_code",
         code,
         user_type: "Company",
         redirect_uri: redirectUri,
-      }),
+      }).toString(),
       cache: "no-store",
     },
   );
