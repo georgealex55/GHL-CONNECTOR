@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     openapi: "3.1.0",
     info: {
       title: "HighLevel Agency Control Gateway",
-      version: "2.0.0",
+      version: "2.3.0",
       description: "Secure GPT-facing control layer for HighLevel. Native writes include CRM, Social Planner and blogs; workflow definitions and funnel/page design are read/discovery only where HighLevel's public API is read-only."
     },
     servers: [{ url: origin }],
