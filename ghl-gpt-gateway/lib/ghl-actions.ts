@@ -224,16 +224,20 @@ export async function executeSdkWriteAction(
     }
 
     case "create_blog_post": {
-      const { ghl } = await getLocationClient(p);
-      const data = await ghl.blogs.createBlogPost(reqBody(p) as any);
+      const { ghl, locationId } = await getLocationClient(p);
+      const data = await ghl.blogs.createBlogPost(
+        reqBody(p) as any,
+        { headers: { locationId } },
+      );
       return { status: 200, ok: true, risk: "write", data };
     }
 
     case "update_blog_post": {
-      const { ghl } = await getLocationClient(p);
+      const { ghl, locationId } = await getLocationClient(p);
       const data = await ghl.blogs.updateBlogPost(
         { postId: reqString(p, "id") },
         reqBody(p) as any,
+        { headers: { locationId } },
       );
       return { status: 200, ok: true, risk: "write", data };
     }
@@ -252,8 +256,11 @@ export async function executeSdkWriteAction(
     }
 
     case "create_redirect": {
-      const { ghl } = await getLocationClient(p);
-      const data = await ghl.funnels.createRedirect(reqBody(p) as any);
+      const { ghl, locationId } = await getLocationClient(p);
+      const data = await ghl.funnels.createRedirect(
+        reqBody(p) as any,
+        { headers: { locationId } },
+      );
       return { status: 200, ok: true, risk: "write", data };
     }
 
