@@ -1,4 +1,4 @@
-# GHL GPT Agency Control Gateway v2.2
+# GHL GPT Agency Control Gateway v2.3
 
 A secure Vercel/Next.js control layer between GPT and HighLevel.
 
@@ -20,6 +20,8 @@ A secure Vercel/Next.js control layer between GPT and HighLevel.
 - `GET /api/ghl/status` — protected live SDK diagnostic that performs a minimal HighLevel API request
 - `GET /api/oauth/status` — reports OAuth + durable token-storage readiness without exposing tokens
 - `POST /api/oauth/location-session` — protected diagnostic that mints/verifies a Location OAuth session without returning the token
+- `GET /api/ghl/read-validation` — protected non-mutating SDK read matrix
+- `POST /api/ghl/write-validation` — protected non-mutating invalid-payload preflight for SDK write scopes
 - `GET /api/agency/identity` — protected diagnostic that validates the discovered Company ID against HighLevel
 - `GET /api/openapi.json` — GPT Actions/OpenAPI schema
 - `POST /api/agency/action` — semantic action router
@@ -55,7 +57,7 @@ See `PERMISSIONS.md` for the scope checklist.
 
 The `ghl-sdk-integration` branch introduces `@gohighlevel/api-client` as the primary transport while preserving the legacy allowlisted REST layer as a fallback.
 
-Agency-level discovery can continue to use the Agency Private Integration token. Location-scoped actions now use an Agency OAuth session to mint per-location OAuth tokens, which are stored encrypted in Neon/Postgres and automatically refreshed by the SDK.
+Agency-level discovery can continue to use the Agency Private Integration token. The Marketplace app is Sub-account targeted and bulk-installed by the Agency; its stored Company OAuth session mints per-location OAuth tokens, which are stored encrypted in Neon/Postgres and automatically refreshed by the SDK.
 
 Currently migrated to the official SDK:
 
@@ -65,3 +67,8 @@ Currently migrated to the official SDK:
 - Destructive actions remain on the legacy guarded transport until SDK validation is complete.
 
 API responses from `POST /api/agency/action` now include `transport: "official-sdk"` or `transport: "legacy-rest"` so the active path is visible during testing.
+
+
+## Validation status
+
+Preview validation has confirmed official-SDK reads for locations, workflows, funnels, funnel pages, blogs and Social Planner accounts. The write-validation endpoint uses intentionally invalid payloads so OAuth/write-scope routing can be checked without creating live HighLevel data.
