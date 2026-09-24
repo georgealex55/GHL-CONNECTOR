@@ -30,9 +30,7 @@ export async function GET(request: Request) {
 
   const clientId = process.env.GHL_OAUTH_CLIENT_ID?.trim();
   const clientSecret = process.env.GHL_OAUTH_CLIENT_SECRET?.trim();
-  const redirectUri =
-    process.env.GHL_OAUTH_REDIRECT_URI?.trim() ||
-    `${url.origin}/api/oauth/callback`;
+  const redirectUri = `${url.origin}/api/oauth/callback`;
 
   if (!clientId || !clientSecret) {
     return NextResponse.json(
