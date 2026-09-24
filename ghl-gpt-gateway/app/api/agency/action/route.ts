@@ -14,6 +14,16 @@ function reqString(p: Payload, key: string): string {
   return value.trim();
 }
 
+function errorStatus(error: unknown): number {
+  if (error && typeof error === "object" && "statusCode" in error) {
+    const status = Number((error as { statusCode?: unknown }).statusCode);
+    if (Number.isInteger(status) && status >= 400 && status <= 599) {
+      return status;
+    }
+  }
+  return 400;
+}
+
 function query(params: Record<string, unknown>) {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -112,6 +122,9 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json(
+      { error: message },
+      { status: errorStatus(error) },
+    );
   }
 }
