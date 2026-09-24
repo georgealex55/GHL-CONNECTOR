@@ -31,8 +31,18 @@ export async function GET(request: Request) {
     }
   }
 
+  const nextStep =
+    !oauthConfigured
+      ? "Configure HighLevel OAuth client credentials."
+      : !durableStorageConfigured
+        ? "Configure GHL_OAUTH_DATABASE_URL and GHL_TOKEN_ENCRYPTION_KEY for this deployment environment."
+        : !agencySessionStored
+          ? "Install or reinstall the HighLevel Marketplace app to store the Agency OAuth session."
+          : "OAuth is ready. Generate a Location session or run the read validation endpoint.";
+
   return NextResponse.json({
     ok: true,
+    nextStep,
     oauthConfigured,
     durableStorageConfigured,
     locationOAuthReady:
