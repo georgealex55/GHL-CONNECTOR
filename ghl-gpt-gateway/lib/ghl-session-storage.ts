@@ -194,13 +194,13 @@ export class NeonSessionStorage extends SessionStorage {
 
     const sql = this.getSql();
     const appId = this.appId();
-    const rows = await sql`
+    const rows = (await sql`
       SELECT encrypted_payload
       FROM ghl_oauth_sessions
       WHERE application_id = ${appId}
         AND resource_id = ${resourceId}
       LIMIT 1
-    `;
+    `) as unknown as Array<{ encrypted_payload?: unknown }>;
 
     const payload = rows[0]?.encrypted_payload;
     return typeof payload === "string" ? unseal(payload) : null;
@@ -233,12 +233,12 @@ export class NeonSessionStorage extends SessionStorage {
 
     const sql = this.getSql();
     const appId = this.appId();
-    const rows = await sql`
+    const rows = (await sql`
       SELECT encrypted_payload
       FROM ghl_oauth_sessions
       WHERE application_id = ${appId}
       ORDER BY updated_at DESC
-    `;
+    `) as unknown as Array<{ encrypted_payload?: unknown }>;
 
     return rows
       .map((row) =>
