@@ -1,4 +1,4 @@
-# GHL GPT Agency Control Gateway v2.1
+# GHL GPT Agency Control Gateway v2.2
 
 A secure Vercel/Next.js control layer between GPT and HighLevel.
 
@@ -6,14 +6,20 @@ A secure Vercel/Next.js control layer between GPT and HighLevel.
 
 - `GHL_PRIVATE_INTEGRATION_TOKEN` — full HighLevel Private Integration token
 - `GATEWAY_API_KEY` — separate secret used by GPT to call this gateway
-- `GHL_COMPANY_ID` — optional override. If omitted, the gateway automatically discovers the agency/company ID from the Private Integration JWT when available.
+- `GHL_COMPANY_ID` — Agency/Company ID used for agency discovery and Agency → Location OAuth token generation
 - `GHL_API_BASE` — defaults to `https://services.leadconnectorhq.com`
 - `ALLOW_DESTRUCTIVE_ACTIONS` — defaults to false; set true only if you want deletes/removals enabled
+- `GHL_OAUTH_CLIENT_ID` / `GHL_OAUTH_CLIENT_SECRET` — HighLevel Marketplace OAuth credentials
+- `GHL_OAUTH_REDIRECT_URI` — Marketplace OAuth callback URL
+- `GHL_OAUTH_DATABASE_URL` — Neon/Postgres connection string for durable OAuth sessions
+- `GHL_TOKEN_ENCRYPTION_KEY` — 32-byte key used to encrypt OAuth token payloads before database storage
 
 ## Main endpoints
 
 - `GET /api/health` — reports gateway configuration and official SDK integration status
 - `GET /api/ghl/status` — protected live SDK diagnostic that performs a minimal HighLevel API request
+- `GET /api/oauth/status` — reports OAuth + durable token-storage readiness without exposing tokens
+- `POST /api/oauth/location-session` — protected diagnostic that mints/verifies a Location OAuth session without returning the token
 - `GET /api/agency/identity` — protected diagnostic that validates the discovered Company ID against HighLevel
 - `GET /api/openapi.json` — GPT Actions/OpenAPI schema
 - `POST /api/agency/action` — semantic action router
@@ -49,10 +55,13 @@ See `PERMISSIONS.md` for the scope checklist.
 
 The `ghl-sdk-integration` branch introduces `@gohighlevel/api-client` as the primary transport while preserving the legacy allowlisted REST layer as a fallback.
 
+Agency-level discovery can continue to use the Agency Private Integration token. Location-scoped actions now use an Agency OAuth session to mint per-location OAuth tokens, which are stored encrypted in Neon/Postgres and automatically refreshed by the SDK.
+
 Currently migrated to the official SDK:
 
 - Read: locations, Social Planner accounts/posts, blogs/blog post lists, workflows, funnels and funnel pages.
 - Write: create/update Social Planner posts, create/update blog posts, add contacts to workflows and create redirects.
+- Location-scoped read/write actions use durable Location OAuth sessions.
 - Destructive actions remain on the legacy guarded transport until SDK validation is complete.
 
 API responses from `POST /api/agency/action` now include `transport: "official-sdk"` or `transport: "legacy-rest"` so the active path is visible during testing.
