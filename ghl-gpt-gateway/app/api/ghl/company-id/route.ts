@@ -56,13 +56,13 @@ export async function GET(request: Request) {
   try {
     // The company search endpoint can return company identity for an agency
     // Private Integration token without exposing the token to the caller.
-    const response = await ghlSdkRequest<unknown>({
+    const data = await ghlSdkRequest<unknown>({
       method: "GET",
       url: "/companies/",
       headers: { Version: "2021-07-28" },
     });
 
-    const companyId = findCompanyId(response.data);
+    const companyId = findCompanyId(data);
     if (!companyId) {
       return NextResponse.json(
         {
