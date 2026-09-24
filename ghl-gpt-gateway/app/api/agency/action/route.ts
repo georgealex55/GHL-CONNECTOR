@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAuthorized } from "@/lib/auth";
 import { ghlRequest } from "@/lib/ghl";
-import { executeSdkReadAction } from "@/lib/ghl-actions";
+import { executeSdkReadAction, executeSdkWriteAction } from "@/lib/ghl-actions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -97,7 +97,9 @@ export async function POST(request: Request) {
         throw new Error(`Unsupported action: ${action}`);
     }
 
-    const sdkResult = await executeSdkReadAction(action, p);
+    const sdkResult =
+      (await executeSdkReadAction(action, p)) ??
+      (await executeSdkWriteAction(action, p));
     const result = sdkResult ?? await ghlRequest(call);
     return NextResponse.json(
       {
