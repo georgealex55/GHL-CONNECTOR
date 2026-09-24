@@ -5,15 +5,17 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const company = getCompanyIdInfo();
+  const identity = getCompanyIdInfo();
   return NextResponse.json({
     ok: true,
     service: "ghl-gpt-gateway",
-    configured: {
-      ghlToken: Boolean(process.env.GHL_PRIVATE_INTEGRATION_TOKEN),
-      gatewayKey: Boolean(process.env.GATEWAY_API_KEY),
-      companyId: Boolean(company.companyId),
-      companyIdSource: company.source,
+    version: "2.1.0",
+    sdk: {
+      installed: true,
+      package: "@gohighlevel/api-client",
+      mode: process.env.GHL_PRIVATE_INTEGRATION_TOKEN ? "private-integration" : "unconfigured",
     },
+    companyIdConfigured: Boolean(identity.companyId),
+    companyIdSource: identity.source,
   });
 }
