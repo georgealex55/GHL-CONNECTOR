@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAuthorized } from "@/lib/auth";
 import { ghlRequest } from "@/lib/ghl";
+import { executeSdkReadAction } from "@/lib/ghl-actions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,8 +97,17 @@ export async function POST(request: Request) {
         throw new Error(`Unsupported action: ${action}`);
     }
 
-    const result = await ghlRequest(call);
-    return NextResponse.json({ action, locationId: locationId || undefined, ...result }, { status: result.ok ? 200 : result.status });
+    const sdkResult = await executeSdkReadAction(action, p);
+    const result = sdkResult ?? await ghlRequest(call);
+    return NextResponse.json(
+      {
+        action,
+        locationId: locationId || undefined,
+        transport: sdkResult ? "official-sdk" : "legacy-rest",
+        ...result,
+      },
+      { status: result.ok ? 200 : result.status },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 400 });
