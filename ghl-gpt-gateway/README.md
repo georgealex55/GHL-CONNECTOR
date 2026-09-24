@@ -1,4 +1,4 @@
-# GHL GPT Agency Control Gateway v2
+# GHL GPT Agency Control Gateway v2.1
 
 A secure Vercel/Next.js control layer between GPT and HighLevel.
 
@@ -12,7 +12,8 @@ A secure Vercel/Next.js control layer between GPT and HighLevel.
 
 ## Main endpoints
 
-- `GET /api/health` — reports whether Company ID was found and whether its source is `env` or `token`
+- `GET /api/health` — reports gateway configuration and official SDK integration status
+- `GET /api/ghl/status` — protected live SDK diagnostic that performs a minimal HighLevel API request
 - `GET /api/agency/identity` — protected diagnostic that validates the discovered Company ID against HighLevel
 - `GET /api/openapi.json` — GPT Actions/OpenAPI schema
 - `POST /api/agency/action` — semantic action router
@@ -42,3 +43,16 @@ Contacts, opportunities/pipelines and conversations/messages remain available th
 The HighLevel token is never returned to the client. Routes are explicitly allowlisted. Delete/remove actions are blocked unless `ALLOW_DESTRUCTIVE_ACTIONS=true` AND the request includes `confirmDestructive=true`.
 
 See `PERMISSIONS.md` for the scope checklist.
+
+
+## Official HighLevel SDK migration
+
+The `ghl-sdk-integration` branch introduces `@gohighlevel/api-client` as the primary transport while preserving the legacy allowlisted REST layer as a fallback.
+
+Currently migrated to the official SDK:
+
+- Read: locations, Social Planner accounts/posts, blogs/blog post lists, workflows, funnels and funnel pages.
+- Write: create/update Social Planner posts, create/update blog posts, add contacts to workflows and create redirects.
+- Destructive actions remain on the legacy guarded transport until SDK validation is complete.
+
+API responses from `POST /api/agency/action` now include `transport: "official-sdk"` or `transport: "legacy-rest"` so the active path is visible during testing.
