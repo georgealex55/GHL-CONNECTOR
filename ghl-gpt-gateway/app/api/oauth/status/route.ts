@@ -10,9 +10,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const origin = new URL(request.url).origin;
-  const redirectUri =
-    process.env.GHL_OAUTH_REDIRECT_URI?.trim() ||
-    `${origin}/api/oauth/callback`;
+  const redirectUri = `${origin}/api/oauth/callback`;
+  const configuredRedirectUri =
+    process.env.GHL_OAUTH_REDIRECT_URI?.trim() || null;
 
   const oauthConfigured = Boolean(
     process.env.GHL_OAUTH_CLIENT_ID &&
@@ -37,8 +37,10 @@ export async function GET(request: Request) {
       : !durableStorageConfigured
         ? "Configure GHL_OAUTH_DATABASE_URL and GHL_TOKEN_ENCRYPTION_KEY for this deployment environment."
         : !agencySessionStored
-          ? "Install or reinstall the HighLevel Marketplace app to store the Agency OAuth session."
-          : "OAuth is ready. Generate a Location session or run the read validation endpoint.";
+          ? "Install or reinstall the HighLevel Marketplace app to store the Company OAuth session."
+          : configuredRedirectUri && configuredRedirectUri !== redirectUri
+            ? "OAuth is ready, but GHL_OAUTH_REDIRECT_URI does not match this deployment callback."
+            : "OAuth is ready. Generate a Location session or run validation.";
 
   return NextResponse.json({
     ok: true,
@@ -49,6 +51,9 @@ export async function GET(request: Request) {
       isLocationOAuthConfigured() && agencySessionStored,
     agencySessionStored,
     redirectUri,
+    configuredRedirectUri,
+    configuredRedirectUriMatchesRuntime:
+      !configuredRedirectUri || configuredRedirectUri === redirectUri,
     clientIdConfigured: Boolean(process.env.GHL_OAUTH_CLIENT_ID),
     clientSecretConfigured: Boolean(process.env.GHL_OAUTH_CLIENT_SECRET),
     tokenEncryptionConfigured: Boolean(
