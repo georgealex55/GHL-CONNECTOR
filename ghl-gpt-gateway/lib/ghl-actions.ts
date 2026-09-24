@@ -1,5 +1,8 @@
 import { getHighLevelClient } from "@/lib/ghl-client";
-import { getCompanyIdInfo } from "@/lib/identity";
+import {
+  ensureLocationOAuthSession,
+  getOAuthHighLevelClient,
+} from "@/lib/ghl-oauth";
 
 type Payload = Record<string, unknown>;
 
@@ -21,6 +24,36 @@ function optNumber(value: unknown, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function locationIdFromPayload(p: Payload): string {
+  if (typeof p.locationId === "string" && p.locationId.trim()) {
+    return p.locationId.trim();
+  }
+
+  const body = p.body;
+  if (body && typeof body === "object" && !Array.isArray(body)) {
+    const value = (body as Record<string, unknown>).locationId;
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  throw new Error(
+    "locationId is required for location-scoped OAuth actions",
+  );
+}
+
+async function getLocationClient(
+  p: Payload,
+): Promise<{
+  ghl: ReturnType<typeof getOAuthHighLevelClient>;
+  locationId: string;
+}> {
+  const locationId = locationIdFromPayload(p);
+  await ensureLocationOAuthSession(locationId);
+  return {
+    ghl: getOAuthHighLevelClient(),
+    locationId,
+  };
+}
+
 export type SdkReadResult = {
   status: 200;
   ok: true;
@@ -29,21 +62,22 @@ export type SdkReadResult = {
 };
 
 /**
- * Executes the read-only actions that have been migrated to the official
- * HighLevel SDK. Returning undefined tells the caller to use the legacy REST
- * fallback for actions that have not been migrated yet.
+ * Executes read actions through the official SDK.
+ *
+ * Agency discovery continues to use the Agency Private Integration token.
+ * Location-scoped actions use durable OAuth sessions. The first request for a
+ * location mints a Location token from the stored Agency OAuth session.
  */
 export async function executeSdkReadAction(
   action: string,
   p: Payload,
 ): Promise<SdkReadResult | undefined> {
-  const ghl = getHighLevelClient();
-
   switch (action) {
     case "list_locations": {
-      const { companyId } = getCompanyIdInfo();
+      const ghl = getHighLevelClient();
       const data = await ghl.locations.searchLocations({
-        companyId: companyId || undefined,
+        companyId:
+          process.env.GHL_COMPANY_ID?.trim() || undefined,
         limit: optString(p.limit ?? 100),
         skip: optString(p.skip),
       });
@@ -51,36 +85,40 @@ export async function executeSdkReadAction(
     }
 
     case "list_social_accounts": {
+      const { ghl, locationId } = await getLocationClient(p);
       const data = await ghl.socialMediaPosting.getAccount({
-        locationId: reqString(p, "locationId"),
+        locationId,
       });
       return { status: 200, ok: true, risk: "read", data };
     }
 
     case "list_social_posts": {
+      const { ghl, locationId } = await getLocationClient(p);
       const body =
         p.body && typeof p.body === "object"
           ? p.body
           : { type: "all", skip: "0", limit: "20" };
 
       const data = await ghl.socialMediaPosting.getPosts(
-        { locationId: reqString(p, "locationId") },
+        { locationId },
         body as any,
       );
       return { status: 200, ok: true, risk: "read", data };
     }
 
     case "get_social_post": {
+      const { ghl, locationId } = await getLocationClient(p);
       const data = await ghl.socialMediaPosting.getPost({
-        locationId: reqString(p, "locationId"),
+        locationId,
         id: reqString(p, "id"),
       });
       return { status: 200, ok: true, risk: "read", data };
     }
 
     case "list_blogs": {
+      const { ghl, locationId } = await getLocationClient(p);
       const data = await ghl.blogs.getBlogs({
-        locationId: reqString(p, "locationId"),
+        locationId,
         skip: optNumber(p.skip, 0),
         limit: optNumber(p.limit, 50),
         searchTerm: optString(p.searchTerm),
@@ -89,8 +127,9 @@ export async function executeSdkReadAction(
     }
 
     case "list_blog_posts": {
+      const { ghl, locationId } = await getLocationClient(p);
       const data = await ghl.blogs.getBlogPost({
-        locationId: reqString(p, "locationId"),
+        locationId,
         blogId: reqString(p, "blogId"),
         limit: optNumber(p.limit, 50),
         offset: optNumber(p.offset, 0),
@@ -101,15 +140,17 @@ export async function executeSdkReadAction(
     }
 
     case "list_workflows": {
+      const { ghl, locationId } = await getLocationClient(p);
       const data = await ghl.workflows.getWorkflow({
-        locationId: reqString(p, "locationId"),
+        locationId,
       });
       return { status: 200, ok: true, risk: "read", data };
     }
 
     case "list_funnels": {
+      const { ghl, locationId } = await getLocationClient(p);
       const data = await ghl.funnels.getFunnels({
-        locationId: reqString(p, "locationId"),
+        locationId,
         type: optString(p.type),
         category: optString(p.category),
         offset: optString(p.offset ?? 0),
@@ -121,8 +162,9 @@ export async function executeSdkReadAction(
     }
 
     case "list_funnel_pages": {
+      const { ghl, locationId } = await getLocationClient(p);
       const data = await ghl.funnels.getPagesByFunnelId({
-        locationId: reqString(p, "locationId"),
+        locationId,
         funnelId: reqString(p, "funnelId"),
         name: optString(p.name),
         limit: optNumber(p.limit, 50),
@@ -135,7 +177,6 @@ export async function executeSdkReadAction(
       return undefined;
   }
 }
-
 
 function reqBody(p: Payload): Record<string, unknown> {
   const body = p.body;
@@ -153,29 +194,28 @@ export type SdkWriteResult = {
 };
 
 /**
- * Phase 2 SDK write migration. Destructive operations intentionally remain on
- * the legacy guarded transport until the SDK path has been validated in a
- * preview environment.
+ * Location-scoped writes use the same durable OAuth session as reads.
+ * Destructive operations remain on the legacy guarded transport.
  */
 export async function executeSdkWriteAction(
   action: string,
   p: Payload,
 ): Promise<SdkWriteResult | undefined> {
-  const ghl = getHighLevelClient();
-
   switch (action) {
     case "create_social_post": {
+      const { ghl, locationId } = await getLocationClient(p);
       const data = await ghl.socialMediaPosting.createPost(
-        { locationId: reqString(p, "locationId") },
+        { locationId },
         reqBody(p) as any,
       );
       return { status: 200, ok: true, risk: "write", data };
     }
 
     case "update_social_post": {
+      const { ghl, locationId } = await getLocationClient(p);
       const data = await ghl.socialMediaPosting.editPost(
         {
-          locationId: reqString(p, "locationId"),
+          locationId,
           id: reqString(p, "id"),
         },
         reqBody(p) as any,
@@ -184,11 +224,13 @@ export async function executeSdkWriteAction(
     }
 
     case "create_blog_post": {
+      const { ghl } = await getLocationClient(p);
       const data = await ghl.blogs.createBlogPost(reqBody(p) as any);
       return { status: 200, ok: true, risk: "write", data };
     }
 
     case "update_blog_post": {
+      const { ghl } = await getLocationClient(p);
       const data = await ghl.blogs.updateBlogPost(
         { postId: reqString(p, "id") },
         reqBody(p) as any,
@@ -197,17 +239,20 @@ export async function executeSdkWriteAction(
     }
 
     case "add_contact_to_workflow": {
+      const { ghl, locationId } = await getLocationClient(p);
       const data = await ghl.contacts.addContactToWorkflow(
         {
           contactId: reqString(p, "contactId"),
           workflowId: reqString(p, "workflowId"),
         },
         (p.body && typeof p.body === "object" ? p.body : {}) as any,
+        { headers: { locationId } },
       );
       return { status: 200, ok: true, risk: "write", data };
     }
 
     case "create_redirect": {
+      const { ghl } = await getLocationClient(p);
       const data = await ghl.funnels.createRedirect(reqBody(p) as any);
       return { status: 200, ok: true, risk: "write", data };
     }
