@@ -63,7 +63,6 @@ export async function GET(request: Request) {
       headers: {
         Accept: "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
-        Version: "v3",
       },
       body: new URLSearchParams({
         client_id: clientId,
@@ -86,12 +85,33 @@ export async function GET(request: Request) {
   }
 
   if (!tokenResponse.ok) {
+    const safeDetails = {
+      error: typeof data.error === "string" ? data.error : undefined,
+      errorDescription:
+        typeof data.error_description === "string"
+          ? data.error_description
+          : undefined,
+      message: typeof data.message === "string" ? data.message : undefined,
+      statusCode:
+        typeof data.statusCode === "number" ||
+        typeof data.statusCode === "string"
+          ? data.statusCode
+          : undefined,
+      traceId:
+        typeof data.traceId === "string" ? data.traceId : undefined,
+    };
+
+    console.error("HighLevel OAuth token exchange failed", {
+      status: tokenResponse.status,
+      ...safeDetails,
+    });
+
     return NextResponse.json(
       {
         ok: false,
         status: tokenResponse.status,
         error: "HighLevel OAuth token exchange failed.",
-        details: data,
+        details: safeDetails,
       },
       { status: tokenResponse.status },
     );
