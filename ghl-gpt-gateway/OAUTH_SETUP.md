@@ -1,71 +1,152 @@
-# HighLevel Agency OAuth Bootstrap
+# HighLevel Agency → Location OAuth
 
-The gateway keeps the existing Agency Private Integration Token (PIT) for normal server-to-server calls.
+The gateway now uses a two-level authentication model:
 
-Agency OAuth is added primarily to obtain HighLevel's authoritative `companyId` and to provide a path to a full OAuth migration later.
+1. The existing Agency Private Integration Token remains available for agency-level discovery such as listing locations.
+2. A HighLevel Marketplace OAuth installation stores the Agency access/refresh token securely.
+3. For location-scoped operations, the gateway exchanges the stored Agency token for a Location token using HighLevel's official OAuth endpoint.
+4. Location access/refresh tokens are stored durably and refreshed by the official HighLevel SDK.
 
-## Why hybrid first
+This avoids creating a separate Private Integration manually inside every sub-account.
 
-HighLevel's Agency OAuth token response contains `companyId` directly. Private Integration Tokens are static/fixed OAuth-like tokens, but their token payload should not be treated as a guaranteed source for Company ID.
+## Required environment variables
 
-This bootstrap flow exchanges the OAuth authorization code, extracts only `companyId`, and intentionally does not return or persist the OAuth access/refresh tokens.
-
-## Create the HighLevel Marketplace app
-
-In the HighLevel Marketplace Developer Portal:
-
-1. Create an app.
-2. Use **Private** while building/testing.
-3. Set **Target User = Agency**. This cannot be changed after app creation.
-4. Use **Agency Only** for installation visibility for this internal agency-control app.
-5. In Advanced Settings -> Auth, add the scopes you need.
-6. Add this exact Redirect URL:
-
-```
-https://ghl-gpt-gateway.vercel.app/api/oauth/callback
-```
-
-7. Create a Client Key and copy both values:
-   - Client ID
-   - Client Secret
-8. Copy the Installation URL shown by HighLevel.
-
-## Vercel environment variables
-
-Add:
-
-```
-GHL_OAUTH_CLIENT_ID=<HighLevel Marketplace Client ID>
-GHL_OAUTH_CLIENT_SECRET=<HighLevel Marketplace Client Secret>
-GHL_OAUTH_REDIRECT_URI=https://ghl-gpt-gateway.vercel.app/api/oauth/callback
-```
-
-Keep:
+Keep the existing variables:
 
 ```
 GHL_PRIVATE_INTEGRATION_TOKEN=<Agency PIT>
-GATEWAY_API_KEY=<your gateway secret>
+GATEWAY_API_KEY=<gateway secret>
+GHL_COMPANY_ID=<HighLevel company ID>
 GHL_API_BASE=https://services.leadconnectorhq.com
 ALLOW_DESTRUCTIVE_ACTIONS=false
 ```
 
-You may leave `GHL_COMPANY_ID` absent until OAuth returns it.
+OAuth credentials:
 
-## Run the bootstrap
+```
+GHL_OAUTH_CLIENT_ID=<Marketplace App Client ID>
+GHL_OAUTH_CLIENT_SECRET=<Marketplace App Client Secret>
+GHL_OAUTH_REDIRECT_URI=https://agency-control-gateway.vercel.app/api/oauth/callback
+```
 
-1. Redeploy after adding the OAuth variables.
-2. Open:
-   `https://ghl-gpt-gateway.vercel.app/api/oauth/status`
-3. Confirm `oauthConfigured: true`.
-4. Open the Installation URL from the HighLevel Marketplace app.
-5. Install it to your Agency.
+Durable OAuth storage:
+
+```
+GHL_OAUTH_DATABASE_URL=<Neon Postgres connection string>
+GHL_TOKEN_ENCRYPTION_KEY=<32-byte encryption key, hex or base64>
+```
+
+`DATABASE_URL` may be used instead of `GHL_OAUTH_DATABASE_URL`, but the dedicated variable is preferred so OAuth token storage is clearly separated from other application databases.
+
+## Storage design
+
+OAuth sessions are stored in Postgres table:
+
+```
+ghl_oauth_sessions
+```
+
+Each token payload is encrypted with AES-256-GCM before it is written to Postgres. The encryption key remains only in the deployment environment.
+
+The table is created automatically when durable OAuth storage is first initialized.
+
+## Marketplace app
+
+Use an Agency-targeted HighLevel Marketplace app.
+
+The OAuth app must request both the agency scopes needed for installation/discovery and the location scopes required by the gateway, including the location-level services you intend to use such as workflows, funnels, blogs, Social Planner, contacts, conversations, calendars, and other enabled modules.
+
+The redirect URL must exactly match:
+
+```
+https://agency-control-gateway.vercel.app/api/oauth/callback
+```
+
+## Bootstrap sequence
+
+1. Configure all OAuth and durable-storage environment variables in Vercel Preview.
+2. Redeploy `ghl-sdk-integration`.
+3. Open:
+
+   `/api/oauth/status`
+
+4. Confirm:
+
+```json
+{
+  "oauthConfigured": true,
+  "durableStorageConfigured": true,
+  "agencySessionStored": false
+}
+```
+
+5. Install or reinstall the Marketplace app to the Agency.
 6. HighLevel redirects to `/api/oauth/callback?code=...`.
-7. The callback exchanges the code and returns a JSON response containing:
-   `companyId`.
-8. Copy only that Company ID into Vercel as:
-   `GHL_COMPANY_ID`
-9. Redeploy.
+7. The callback exchanges the code and stores the Agency access + refresh tokens encrypted in Postgres. Tokens are never returned to the browser.
+8. Check `/api/oauth/status` again. It should report:
 
-## Full OAuth migration later
+```json
+{
+  "locationOAuthReady": true,
+  "agencySessionStored": true
+}
+```
 
-A full OAuth-only gateway should persist and encrypt the refresh token in a durable database and automatically refresh the one-day access token. Until that storage layer is added, PIT remains the more reliable server credential for this internal gateway.
+## Location token generation
+
+Location-scoped SDK actions automatically call the location session manager.
+
+For a new location:
+
+```
+Agency OAuth session
+        ↓
+POST /oauth/locationToken
+        ↓
+Location access + refresh token
+        ↓
+Encrypted durable session
+        ↓
+Official HighLevel SDK request
+```
+
+A protected diagnostic endpoint is also available:
+
+```
+POST /api/oauth/location-session
+{
+  "locationId": "<location-id>"
+}
+```
+
+It reports whether the session already existed or was newly created, but never returns access or refresh tokens.
+
+## Current routing
+
+Agency Private Integration:
+- `list_locations`
+- other agency-level operations that are supported by the Agency PIT
+
+Durable Location OAuth:
+- workflows
+- funnels/pages
+- blogs
+- Social Planner
+- migrated location-scoped write actions
+
+Destructive actions remain behind the existing double guard:
+
+```
+ALLOW_DESTRUCTIVE_ACTIONS=true
+confirmDestructive=true
+```
+
+## Production promotion
+
+Do not merge this branch into `main` until:
+
+1. durable OAuth storage is configured,
+2. Agency OAuth installation is stored successfully,
+3. at least one Location token can be generated,
+4. the read validation endpoint passes the location-scoped tests,
+5. safe write actions have been tested with disposable data.
