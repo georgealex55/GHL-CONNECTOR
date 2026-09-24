@@ -51,8 +51,14 @@ function firstIdFromCollection(value: unknown, key: string): string | null {
   if (!items?.length) return null;
 
   const first = asRecord(items[0]);
-  const id = first?.id;
-  return typeof id === "string" && id.trim() ? id.trim() : null;
+  if (!first) return null;
+
+  for (const field of ["id", "_id"]) {
+    const value = first[field];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  return null;
 }
 
 async function runRead(
@@ -165,7 +171,7 @@ export async function GET(request: Request) {
       action: "list_funnel_pages",
       ok: true,
       skipped: true,
-      error: "Skipped because no funnel was returned for the sample location.",
+      error: "Skipped because no funnel identifier was returned for the sample location.",
     });
   }
 
@@ -177,7 +183,8 @@ export async function GET(request: Request) {
       transport: "official-sdk",
       readOnly: true,
       checks,
-      passed: checks.filter((check) => check.ok).length,
+      passed: checks.filter((check) => check.ok && !check.skipped).length,
+      skipped: checks.filter((check) => check.skipped).length,
       failed: failed.length,
     },
     { status: failed.length === 0 ? 200 : 502 },
