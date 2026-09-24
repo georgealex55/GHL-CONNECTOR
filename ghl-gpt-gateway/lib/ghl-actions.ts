@@ -135,3 +135,84 @@ export async function executeSdkReadAction(
       return undefined;
   }
 }
+
+
+function reqBody(p: Payload): Record<string, unknown> {
+  const body = p.body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error("body is required");
+  }
+  return body as Record<string, unknown>;
+}
+
+export type SdkWriteResult = {
+  status: 200;
+  ok: true;
+  risk: "write";
+  data: unknown;
+};
+
+/**
+ * Phase 2 SDK write migration. Destructive operations intentionally remain on
+ * the legacy guarded transport until the SDK path has been validated in a
+ * preview environment.
+ */
+export async function executeSdkWriteAction(
+  action: string,
+  p: Payload,
+): Promise<SdkWriteResult | undefined> {
+  const ghl = getHighLevelClient();
+
+  switch (action) {
+    case "create_social_post": {
+      const data = await ghl.socialMediaPosting.createPost(
+        { locationId: reqString(p, "locationId") },
+        reqBody(p) as any,
+      );
+      return { status: 200, ok: true, risk: "write", data };
+    }
+
+    case "update_social_post": {
+      const data = await ghl.socialMediaPosting.editPost(
+        {
+          locationId: reqString(p, "locationId"),
+          id: reqString(p, "id"),
+        },
+        reqBody(p) as any,
+      );
+      return { status: 200, ok: true, risk: "write", data };
+    }
+
+    case "create_blog_post": {
+      const data = await ghl.blogs.createBlogPost(reqBody(p) as any);
+      return { status: 200, ok: true, risk: "write", data };
+    }
+
+    case "update_blog_post": {
+      const data = await ghl.blogs.updateBlogPost(
+        { postId: reqString(p, "id") },
+        reqBody(p) as any,
+      );
+      return { status: 200, ok: true, risk: "write", data };
+    }
+
+    case "add_contact_to_workflow": {
+      const data = await ghl.contacts.addContactToWorkflow(
+        {
+          contactId: reqString(p, "contactId"),
+          workflowId: reqString(p, "workflowId"),
+        },
+        (p.body && typeof p.body === "object" ? p.body : {}) as any,
+      );
+      return { status: 200, ok: true, risk: "write", data };
+    }
+
+    case "create_redirect": {
+      const data = await ghl.funnels.createRedirect(reqBody(p) as any);
+      return { status: 200, ok: true, risk: "write", data };
+    }
+
+    default:
+      return undefined;
+  }
+}
